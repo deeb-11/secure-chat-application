@@ -1,6 +1,7 @@
 #include <iostream>
+#include <fstream>
+#include <vector>
 #include <cstring>
-#include <vector> // Include the <vector> header
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -9,23 +10,61 @@
 constexpr int PORT = 4500;
 constexpr int BUFFER_SIZE = 1024;
 
-// Define a structure to hold user credentials
+// Structure to hold user credentials
 struct User {
     std::string username;
     std::string password;
 };
 
+// Caesar cipher encryption function
+std::string encrypt(const std::string& input, int key) {
+    std::string result = input;
+    for (char& c : result) {
+        if (std::isalpha(c)) {
+            char base = std::isupper(c) ? 'A' : 'a';
+            c = (c - base + key) % 26 + base;
+        }
+    }
+    return result;
+}
+
 // Function to authenticate user credentials
-bool authenticateUser(const std::string& username, const std::string& password, const std::vector<User>& users) {
-    for (const auto& user : users) {
-        if (user.username == username && user.password == password) {
-            return true;
+bool AuthenticateUser(const std::string& username, const std::string& password) {
+    std::ifstream file("accounts.txt");
+    std::string line;
+    while (std::getline(file, line)) {
+        size_t pos = line.find(':');
+        if (pos != std::string::npos) {
+            std::string fileUsername = line.substr(0, pos);
+            std::string filePassword = line.substr(pos + 1);
+            if (fileUsername == username && filePassword == password) {
+                return true;
+            }
         }
     }
     return false;
 }
 
+// Function to create a new user account
+void CreateAccount(const std::string& username, const std::string& password) {
+    std::ofstream file("accounts.txt", std::ios_base::app);
+    file << username << ":" << password << std::endl;
+}
+
 int main() {
+std::cout << R"(
+
+
+      __   __     _  _ _  __     __            _  _ _   __  ___ 
+     / _/  /  _]   /  ]|  |  ||    \   /  _]          /  ]|  |  | /    ||      |
+    (   \_  /  [_   /  / |  |  ||  D  ) /  [_  ___   /  / |  |  ||  o  ||      |
+     \_  ||    _] /  /  |  |  ||    / |    _]|     | /  /  |  _  ||     |||  |_|
+     /  \ ||   [_ /   \_ |  :  ||    \ |   [_ |__|/   \ |  |  ||  _  |  |  |  
+     \    ||     |\     ||     ||  .  \|     |       \     ||  |  ||  |  |  |  |  
+      \_||__| \_| \_,||_|\||__|        \_||_|||||  |_|  
+                                                                              
+
+    )" << std::endl;
     int serverSocket, clientSocket;
     sockaddr_in serverAddr, clientAddr;
     socklen_t clientAddrLen = sizeof(clientAddr);
@@ -55,12 +94,6 @@ int main() {
 
     std::cout << "Server listening on port " << PORT << std::endl;
 
-    // Define user accounts
-    std::vector<User> users = {
-        {"deeb", "deeb123"},
-        {"server", "server_admin"}
-    };
-
     // Accept incoming connection
     if ((clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrLen)) < 0) {
         std::cerr << "Accept failed" << std::endl;
@@ -71,14 +104,16 @@ int main() {
 
     char buffer[BUFFER_SIZE];
     while (true) {
+        // Wait for message from client
         memset(buffer, 0, sizeof(buffer));
         if (recv(clientSocket, buffer, BUFFER_SIZE, 0) <= 0) {
             std::cout << "Connection closed by client." << std::endl;
             break;
         }
-        std::cout << "deeb: " << buffer << std::endl;
 
-        // Check if the received message is a login command
+        std::cout << "Client message: " << buffer << std::endl;
+
+        // Check if the received message is a login command or create account command
         if (strncmp(buffer, "LOGIN:", 6) == 0) {
             // Extract username and password from the message
             std::string loginInfo = buffer + 6; // Skip "LOGIN:"
@@ -88,20 +123,38 @@ int main() {
                 std::string password = loginInfo.substr(delimiterPos + 1);
 
                 // Authenticate user credentials
-                if (authenticateUser(username, password, users)) {
-                    send(clientSocket, "Login successful", 16, 0);
-                    std::cout << "Login successful" << std::endl;
+                if (AuthenticateUser(username, password)) {
+                    send(clientSocket, "Authenticated", 14, 0);
+                    std::cout << "Authentication successful" << std::endl;
                 } else {
-                    send(clientSocket, "Login failed", 12, 0);
-                    std::cout << "Login failed" << std::endl;
-                    close(clientSocket);
-                    return 1; // Exit the program if login fails
+                    send(clientSocket, "Authentication failed", 21, 0);
+                    std::cout << "Authentication failed" << std::endl;
                 }
             }
+        } else if (strncmp(buffer, "CREATE:", 7) == 0) {
+            // Extract username and password from the message
+            std::string userInfo = buffer + 7; // Skip "CREATE:"
+            size_t delimiterPos = userInfo.find(':');
+            if (delimiterPos != std::string::npos) {
+                std::string username = userInfo.substr(0, delimiterPos);
+                std::string password = userInfo.substr(delimiterPos + 1);
+
+                // Create new user account
+                CreateAccount(username, password);
+                send(clientSocket, "Account created", 16, 0);
+                std::cout << "New account created: " << username << std::endl;
+            }
         } else {
-            std::cout << "Server: ";
-            std::cin.getline(buffer, BUFFER_SIZE);
-            send(clientSocket, buffer, strlen(buffer), 0);
+            // Assume received message is a chat message
+            std::cout << "Client: " << buffer << std::endl;
+
+            // Prompt server operator for custom message
+            std::string serverMessage;
+            std::cout << "Server: Enter response message: ";
+            std::getline(std::cin, serverMessage);
+
+            // Send the custom message back to the client
+            send(clientSocket, serverMessage.c_str(), serverMessage.size(), 0);
         }
     }
 
@@ -110,3 +163,4 @@ int main() {
 
     return 0;
 }
+
