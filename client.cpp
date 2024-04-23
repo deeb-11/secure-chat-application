@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <cstring>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -26,17 +27,15 @@ std::string decrypt(const std::string& input, int key) {
 }
 
 int main() {
-std::cout << R"(
+    std::cout << R"(
 
+   _____                                         _____  _             _
+  / ____|                                       / ____|| |           | |
+ | (___    ___   ___  _   _  _ __  ___  ______ | |     | |__    __ _ | |_
+  \___ \  / _ \ / __|| | | || '__|/ _ \|______|| |     | '_ \  / _` || __|
+  ____) ||  __/| (__ | |_| || |  |  __/        | |____ | | | || (_| || |_
+ |_____/  \___| \___| \__,_||_|   \___|         \_____||_| |_| \__,_| \__|
 
-      __   __     _  _ _  __     __            _  _ _   __  ___ 
-     / _/  /  _]   /  ]|  |  ||    \   /  _]          /  ]|  |  | /    ||      |
-    (   \_  /  [_   /  / |  |  ||  D  ) /  [_  ___   /  / |  |  ||  o  ||      |
-     \_  ||    _] /  /  |  |  ||    / |    _]|     | /  /  |  _  ||     |||  |_|
-     /  \ ||   [_ /   \_ |  :  ||    \ |   [_ |__|/   \ |  |  ||  _  |  |  |  
-     \    ||     |\     ||     ||  .  \|     |       \     ||  |  ||  |  |  |  |  
-      \_||__| \_| \_,||_|\||__|        \_||_|||||  |_|  
-                                                                              
 
     )" << std::endl;
     int clientSocket;
@@ -94,10 +93,9 @@ std::cout << R"(
         std::cout << "Enter new password: ";
         std::getline(std::cin, password);
 
-  // Encrypt credentials before sending
+        // Encrypt credentials before sending
         username = encrypt(username, 3); // Encrypt with Caesar cipher key = 3
         password = encrypt(password, 3);
-
 
         // Construct create account command
         std::string createCommand = "CREATE:" + username + ":" + password;
@@ -119,6 +117,9 @@ std::cout << R"(
         std::cout << "Server response: " << buffer << std::endl;
     }
 
+    // Open file in append mode
+    std::ofstream outputFile("chats.txt", std::ios_base::app);
+
     // Enter chat loop
     while (true) {
         std::string message;
@@ -137,10 +138,19 @@ std::cout << R"(
             close(clientSocket);
             return 1;
         } else {
-            std::cout << "Server: " << buffer << std::endl;
+            std::string encryptedMessage(buffer);
+            std::string decryptedMessage = decrypt(encryptedMessage, 3); // Decrypt with Caesar cipher key = 3
+            std::cout << "Server: " << decryptedMessage << std::endl;
+
+            // Encrypt the received server message before storing in the file
+            std::string encryptedServerMessage = encrypt(decryptedMessage, 3); // Encrypt with Caesar cipher key = 3
+
+            // Save the received and encrypted message to file
+            outputFile << "Server: " << encryptedServerMessage << std::endl;
         }
     }
 
     close(clientSocket);
     return 0;
 }
+
